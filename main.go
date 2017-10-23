@@ -6,6 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/travelaudience/kubernetes-vault-client/pkg/config"
+	"github.com/travelaudience/kubernetes-vault-client/pkg/vault"
 )
 
 const (
@@ -23,6 +24,7 @@ func main() {
 	fs.StringVar(&pathToCfg, "config", defaultPathToCfg, "path to config file")
 	fs.Parse(os.Args[1:])
 
+	// Configure logging level and formatting.
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
@@ -36,4 +38,10 @@ func main() {
 
 	// Set the value of 'Debug' on the unmarshalled configuration.
 	cfg.Debug = debug
+
+	// Create a 'VaultClient' using the unmarshalled configuration.
+	_, err = vault.NewClient(cfg)
+	if err != nil {
+		log.Fatalf("couldn't create vault client: %v", err)
+	}
 }

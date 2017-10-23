@@ -1,9 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"path/filepath"
 	"reflect"
 
 	"github.com/mitchellh/mapstructure"
@@ -95,7 +97,7 @@ type Config struct {
 type ModeConfig struct {
 	// Data is the configuration for the chosen mode.
 	Data interface{} `json:"data"`
-	// Name is the name of the mode in use (only "proxy" is supported FTTB).
+	// Name is the name of the mode in use (only "initC" is supported for now).
 	Name string `json:"name"`
 }
 
@@ -133,6 +135,85 @@ type PKIRequest struct {
 	// MountDir is the directory where the requested certificate and
 	// private key will be mounted.
 	MountDir string `json:"mountDir"`
+}
+
+// Check determines whether the specified Config is valid.
+func (cfg *Config) Check() error {
+	u := cfg.TargetURL
+
+	switch u.Scheme {
+	case "http":
+		log.Warn("potentially insecure address specified for vault")
+	case "https":
+		// All is well.
+	default:
+		return errors.New("address must be an http or (preferably) https url")
+	}
+	if u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("address must be http[s]://host[:port][/path]")
+	}
+	if cfg.Auth.Backend == "" {
+		return errors.New("must specify the path to the the gcp auth backend")
+	}
+
+	switch cfg.Auth.Type {
+	case IamAuthType:
+		data := cfg.Auth.Data.(IamAuthConfig)
+		if data.SigningServiceAccountKeyPath == "" {
+			return errors.New("must specify a path to the service account key")
+		}
+		if data.Role == "" {
+			return errors.New("must specify a role to request")
+		}
+		if data.ServiceAccountID == "" {
+			return errors.New("must specify a service account id")
+		}
+	case KubernetesAuthType:
+		data := cfg.Auth.Data.(KubernetesAuthConfig)
+		if data.Role == "" {
+			return errors.New("must specify a role to request")
+		}
+	default:
+		// Should never happen.
+		return fmt.Errorf("auth.type must be one of %v", authTypes)
+	}
+
+	switch cfg.Mode.Name {
+	case InitCModeName:
+		data := cfg.Mode.Data.(InitCModeConfig)
+		for _, val := range data.KV {
+			if val.Path == "" {
+				return fmt.Errorf("must specify the path to a secret")
+			}
+			if val.Key == "" {
+				return fmt.Errorf("must specify a key to request")
+			}
+			if !filepath.IsAbs(val.MountPath) {
+				return fmt.Errorf("path must be absolute: %v", val.MountPath)
+			}
+		}
+		for _, val := range data.PKI {
+			if val.MountName == "" {
+				return fmt.Errorf("must specify a mount name (e.g., 'pki')")
+			}
+			if val.RoleName == "" {
+				return fmt.Errorf("must specify a role name")
+			}
+			if val.CN == "" {
+				return fmt.Errorf("must specifiy a cn for the certificate")
+			}
+			if !filepath.IsAbs(val.MountDir) {
+				return fmt.Errorf("path must be absolute: %v", val.MountDir)
+			}
+		}
+	default:
+		// Should never happen.
+		return fmt.Errorf("mode must be one of %v", modeNames)
+	}
+
+	log.Debug("config: seems ok")
+
+	return nil
 }
 
 // Parse attempts to parse the configuration file at the specified path.
@@ -191,7 +272,7 @@ func Parse(path string) (*Config, error) {
 		return nil, fmt.Errorf("mode.name must be one of %v", modeNameKeys)
 	}
 
-	log.Debugf("config:\n\n%s\n", debug.PrettyPrint(*cfg))
+	log.Debugf("config: parsing ok\n\n%s\n", debug.PrettyPrint(*cfg))
 
 	return cfg, nil
 }
