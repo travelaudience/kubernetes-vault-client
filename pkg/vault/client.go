@@ -3,6 +3,8 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	vaultapi "github.com/hashicorp/vault/api"
@@ -17,6 +19,12 @@ import (
 const (
 	pathToLogin        = "auth/%s/login"
 	renewerGracePeriod = 3 * time.Second
+)
+
+const (
+	PKIIssueCertificateCertKey       = "certificate"
+	PKIIssueCertificateCAChainKey    = "ca_chain"
+	PKIIssueCertificatePrivateKeyKey = "private_key"
 )
 
 type VaultClient struct {
@@ -96,6 +104,93 @@ func NewClient(cfg *config.Config) (*VaultClient, error) {
 
 	// Return the client.
 	return result, nil
+}
+
+func (c *VaultClient) GetAccessor() string {
+	return c.secret.Auth.Accessor
+}
+
+func (c *VaultClient) GetToken() string {
+	return c.secret.Auth.ClientToken
+}
+
+func (c *VaultClient) GetKV(path string) (map[string]string, error) {
+	sec, err := c.client.Logical().Read(path)
+	if err != nil {
+		return nil, err
+	}
+	if sec == nil {
+		return nil, fmt.Errorf("vault: nothing found at %s", path)
+	}
+
+	res := make(map[string]string)
+
+	for k, v := range sec.Data {
+		switch val := v.(type) {
+		case string:
+			res[k] = val
+		default:
+			return nil, fmt.Errorf("vault: %s[%s] has type %T", path, k, val)
+		}
+	}
+
+	return res, nil
+}
+
+func (c *VaultClient) GetPKI(mount, role, cn string, sans []string, cnIsIdentifier bool) (map[string]string, error) {
+	var (
+		ips   []string
+		names []string
+	)
+
+	for _, val := range sans {
+		if addr := net.ParseIP(val); addr != nil {
+			ips = append(ips, addr.String())
+		} else {
+			names = append(names, val)
+		}
+	}
+
+	path := mount + "/issue/" + role
+
+	sec, err := c.client.Logical().Write(
+		path,
+		map[string]interface{}{
+			"common_name":          cn,
+			"alt_names":            strings.Join(names, ","),
+			"ip_sans":              strings.Join(ips, ","),
+			"exclude_cn_from_sans": cnIsIdentifier,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if sec == nil {
+		return nil, fmt.Errorf("vault: unexpected nil response from %s", path)
+	}
+
+	res := make(map[string]string)
+
+	for k, v := range sec.Data {
+		switch val := v.(type) {
+		case string:
+			res[k] = val
+		case []interface{}:
+			res[k] = ""
+			for i, e := range val {
+				switch nvl := e.(type) {
+				case string:
+					res[k] = res[k] + "\n" + nvl
+				default:
+					return nil, fmt.Errorf("vault: %s[%d] has type %T", k, i, val)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("vault: %s has type %T", k, val)
+		}
+	}
+
+	return res, nil
 }
 
 func (c *VaultClient) renewToken(token, accessor string) {
