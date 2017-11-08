@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultPathToCfg = "/kubernetes-vault-client/config.yaml"
+	defaultPathToCfg = "/config/config.yaml"
 )
 
 var (
