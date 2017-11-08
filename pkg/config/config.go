@@ -123,8 +123,8 @@ type KVRequest struct {
 type PKIRequest struct {
 	// MountName is the name of the PKI mount in Vault (e.g., 'pki').
 	MountName string `json:"mountName"`
-	// RoleName is the name of the role configured in Vault's PKI mount.
-	RoleName string `json:"role"`
+	// Role is the name of the role configured in Vault's PKI mount.
+	Role string `json:"role"`
 	// CN is the "common name" being requested for the certificate.
 	CN string `json:"cn"`
 	// SANs is a list of additional DNS names or IP addresses being requested.
@@ -196,8 +196,8 @@ func (cfg *Config) Check() error {
 			if val.MountName == "" {
 				return fmt.Errorf("must specify a mount name (e.g., 'pki')")
 			}
-			if val.RoleName == "" {
-				return fmt.Errorf("must specify a role name")
+			if val.Role == "" {
+				return fmt.Errorf("must specify a role")
 			}
 			if val.CN == "" {
 				return fmt.Errorf("must specifiy a cn for the certificate")

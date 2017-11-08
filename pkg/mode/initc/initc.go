@@ -102,7 +102,7 @@ func dumpCertificates(cfg *config.InitCModeConfig, client *vault.VaultClient) er
 
 	// Grab each certificate from Vault.
 	for _, r := range cfg.PKI {
-		if sec, err := client.GetPKI(r.MountName, r.RoleName, r.CN, r.SANs, r.CNIsIdentifier); err != nil {
+		if sec, err := client.GetPKI(r.MountName, r.Role, r.CN, r.SANs, r.CNIsIdentifier); err != nil {
 			vErrs = multierror.Append(vErrs, err)
 		} else {
 			certs = append(certs, map[string]interface{}{
