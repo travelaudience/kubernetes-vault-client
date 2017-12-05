@@ -10,6 +10,8 @@ ifdef::env-github[]
 :warning-caption: :warning:
 endif::[]
 
+image:https://quay.io/repository/travelaudience/kubernetes-vault-client/status?token=cdc7df01-fd9c-4947-a891-3650644280a3["Docker Repository on Quay", link="https://quay.io/repository/travelaudience/kubernetes-vault-client"]
+
 == Before Proceeding
 
 One is highly encouraged to be familiar with the following concepts before
