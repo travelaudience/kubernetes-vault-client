@@ -70,6 +70,11 @@ func dumpSecrets(cfg *config.InitCModeConfig, client *vault.VaultClient) error {
 
 	// Check for requested keys that do not exist at the specified paths.
 	for _, kvr := range cfg.KV {
+		// skipping if all specified
+		if kvr.Key == "*" {
+			continue
+		}
+
 		if sec := secs[kvr.Path][kvr.Key]; sec == "" {
 			kErrs = multierror.Append(kErrs, fmt.Errorf("'%s' doesn't exist at '%s'", kvr.Key, kvr.Path))
 		}
@@ -85,6 +90,18 @@ func dumpSecrets(cfg *config.InitCModeConfig, client *vault.VaultClient) error {
 
 	// Dump each key to the specified mount path.
 	for _, kvr := range cfg.KV {
+		// mount them all
+		if kvr.Key == "*" {
+			for secKey, secValue := range secs[kvr.Path] {
+				mountPath := kvr.MountPath + "/" + secKey
+				if err := fs.Write(mountPath, secValue); err != nil {
+					dErrs = multierror.Append(dErrs, err)
+					break
+				}
+			}
+			continue
+		}
+
 		if err := fs.Write(kvr.MountPath, secs[kvr.Path][kvr.Key]); err != nil {
 			dErrs = multierror.Append(dErrs, err)
 		}
